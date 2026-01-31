@@ -1,4 +1,4 @@
-# Physics-Informed Quantum Discovery (PIQD)
+# QUASAR: QUantum Algorithm Search via Augmented Reasoning
 
 ## The Invention
 
@@ -8,7 +8,7 @@
 
 ## Why This Is Novel
 
-| Current State | PIQD Innovation |
+| Current State | QUASAR Innovation |
 |---------------|-----------------|
 | LLMs trained on code only | LLMs trained on code + physics dynamics |
 | VQE bottleneck (~100 circuits) | Surrogate enables ~10,000 circuits |
@@ -23,7 +23,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                              PIQD SYSTEM                                      │
+│                             QUASAR SYSTEM                                     │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                               │
 │   ┌─────────────────────────────────────────────────────────────────────┐    │
@@ -494,7 +494,7 @@ loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 **Tasks**:
 1. Encode MHD problem as Hamiltonian
-2. Run PIQD discovery
+2. Run QUASAR discovery
 3. Validate against The Well ground truth
 
 **Success metric**: Discover circuit that simulates MHD with >80% fidelity
@@ -561,7 +561,7 @@ Fits in your Brev/Vast.ai budget.
 
 ## The Claim You Make
 
-> "I built PIQD, a system that uses 15TB of classical physics simulations to accelerate quantum circuit discovery by 100x. The physics-informed surrogate model predicts circuit quality in milliseconds, enabling exploration of 10,000+ candidates. The physics-augmented LLM proposes circuits that achieve 25% lower energy error than baseline. We demonstrate the first quantum circuits for simulating magnetohydrodynamic phenomena, validated against classical simulations from The Well dataset."
+> "I built QUASAR, a system that uses 15TB of classical physics simulations to accelerate quantum circuit discovery by 100x. The physics-informed surrogate model predicts circuit quality in milliseconds, enabling exploration of 10,000+ candidates. The physics-augmented LLM proposes circuits that achieve 25% lower energy error than baseline. We demonstrate the first quantum circuits for simulating magnetohydrodynamic phenomena, validated against classical simulations from The Well dataset."
 
 That's not just "I used an LLM" - that's **inventing a new paradigm**.
 
@@ -572,7 +572,7 @@ That's not just "I used an LLM" - that's **inventing a new paradigm**.
 ```
 quantum-mind/
 ├── src/
-│   ├── piqd/                    # New PIQD components
+│   ├── quasar/                  # QUASAR components
 │   │   ├── __init__.py
 │   │   ├── surrogate.py         # Surrogate evaluator
 │   │   ├── physics_encoder.py   # The Well physics encoding

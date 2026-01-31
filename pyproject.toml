@@ -3,9 +3,9 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "quantum-mind"
+name = "quasar"
 version = "0.1.0"
-description = "Autonomous Quantum Algorithm Discovery Agent"
+description = "QUASAR: QUantum Algorithm Search via Augmented Reasoning"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
