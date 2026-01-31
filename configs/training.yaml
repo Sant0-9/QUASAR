@@ -1,0 +1,99 @@
+# QUASAR Training Configuration
+# Fine-tuning configuration for physics-augmented quantum circuit generation
+
+# Model settings
+model:
+  name: "Qwen/Qwen2.5-Coder-7B-Instruct"
+  trust_remote_code: true
+  torch_dtype: "bfloat16"
+
+# LoRA configuration
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  task_type: "CAUSAL_LM"
+
+# Quantization (QLoRA)
+quantization:
+  load_in_4bit: true
+  bnb_4bit_compute_dtype: "bfloat16"
+  bnb_4bit_quant_type: "nf4"
+  bnb_4bit_use_double_quant: true
+
+# Training hyperparameters
+training:
+  learning_rate: 2.0e-4
+  num_train_epochs: 3
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 8  # Effective batch size = 16
+  max_seq_length: 2048
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  lr_scheduler_type: "cosine"
+
+  # Optimization
+  optim: "paged_adamw_8bit"
+  fp16: false
+  bf16: true
+  gradient_checkpointing: true
+
+  # Logging and saving
+  logging_steps: 10
+  save_steps: 100
+  eval_steps: 100
+  save_total_limit: 3
+
+  # Early stopping
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+
+# Dataset configuration
+dataset:
+  # Dataset weights for mixing
+  weights:
+    quantum_llm: 0.50          # QuantumLLMInstruct (code patterns)
+    physics_augmented: 0.30    # Physics-augmented (physics reasoning)
+    physics_reasoning: 0.20    # Physics reasoning (chain-of-thought)
+
+  # Paths
+  mixed_dataset_dir: "data/mixed"
+  physics_augmented_dir: "data/physics_augmented"
+
+  # Processing
+  max_length: 2048
+  packing: false
+
+# Output configuration
+output:
+  dir: "models/checkpoints/quantum-mind-v2"
+  logging_dir: "logs/training"
+  hub_model_id: null  # Set to push to HuggingFace Hub
+
+# Hardware optimization
+hardware:
+  # Memory optimization
+  max_memory_MB: null  # Auto-detect
+  use_flash_attention: true
+
+  # Multi-GPU
+  ddp: false
+  deepspeed: null  # Path to DeepSpeed config if using
+
+# Validation prompts for tracking progress
+validation_prompts:
+  - "Design an ansatz for a 4-qubit Heisenberg chain that preserves SU(2) symmetry."
+  - "Create a hardware-efficient circuit for the transverse field Ising model on 6 qubits."
+  - "Given a system with U(1) conservation, what gates should be avoided?"
+  - "Design a circuit for a molecular Hamiltonian with 4 spatial orbitals."
+  - "Create a VQE ansatz for the hydrogen molecule in STO-3G basis."

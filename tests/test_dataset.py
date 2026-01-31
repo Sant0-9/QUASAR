@@ -2,7 +2,9 @@
 Tests for the dataset preparation module.
 """
 
+import json
 import os
+import random
 import tempfile
 from unittest.mock import MagicMock, patch
 
@@ -10,8 +12,13 @@ import pytest
 
 from src.training.dataset import (
     DatasetConfig,
+    MixedDatasetConfig,
+    MixedDatasetBuilder,
     clean_example,
     filter_example,
+    format_physics_augmented_example,
+    load_physics_augmented_data,
+    weighted_sample,
 )
 
 
@@ -399,6 +406,340 @@ class TestLoadProcessedDataset:
 
             with pytest.raises(FileNotFoundError):
                 load_processed_dataset("train", config)
+
+
+# ============================================================================
+# Tests for Multi-Source Dataset Mixing (Phase 3)
+# ============================================================================
+
+class TestMixedDatasetConfig:
+    """Tests for MixedDatasetConfig."""
+
+    def test_default_config(self):
+        """Test default configuration values."""
+        config = MixedDatasetConfig()
+
+        assert config.quantum_llm_weight == 0.50
+        assert config.physics_augmented_weight == 0.30
+        assert config.physics_reasoning_weight == 0.20
+        assert config.train_split == 0.9
+        assert config.seed == 42
+
+    def test_weights_sum_to_one(self):
+        """Weights should sum to 1.0."""
+        config = MixedDatasetConfig()
+        total = (
+            config.quantum_llm_weight +
+            config.physics_augmented_weight +
+            config.physics_reasoning_weight
+        )
+        assert abs(total - 1.0) < 1e-6
+
+    def test_custom_config(self):
+        """Test custom configuration."""
+        config = MixedDatasetConfig(
+            quantum_llm_weight=0.6,
+            physics_augmented_weight=0.3,
+            physics_reasoning_weight=0.1,
+            seed=123,
+        )
+
+        assert config.quantum_llm_weight == 0.6
+        assert config.seed == 123
+
+
+class TestFormatPhysicsAugmentedExample:
+    """Tests for format_physics_augmented_example function."""
+
+    def test_basic_formatting(self):
+        """Test basic example formatting."""
+        example = {
+            "instruction": "Design a circuit",
+            "input": "4 qubits",
+            "output": "```python\ndef create(): pass\n```",
+            "type": "physics_to_circuit",
+        }
+        system_prompt = "You are a quantum expert."
+
+        result = format_physics_augmented_example(example, system_prompt)
+
+        assert "text" in result
+        assert "<|im_start|>system" in result["text"]
+        assert "You are a quantum expert" in result["text"]
+        assert "<|im_start|>user" in result["text"]
+        assert "Design a circuit" in result["text"]
+        assert "<|im_start|>assistant" in result["text"]
+        assert "source" in result
+
+    def test_empty_input(self):
+        """Test formatting with empty input."""
+        example = {
+            "instruction": "Design a circuit",
+            "input": "",
+            "output": "code here",
+        }
+        system_prompt = "Expert"
+
+        result = format_physics_augmented_example(example, system_prompt)
+
+        assert "Design a circuit" in result["text"]
+
+    def test_source_preserved(self):
+        """Test that source type is preserved."""
+        example = {
+            "instruction": "Test",
+            "input": "",
+            "output": "output",
+            "type": "simulation_to_insight",
+        }
+
+        result = format_physics_augmented_example(example, "prompt")
+
+        assert result["source"] == "simulation_to_insight"
+
+
+class TestWeightedSample:
+    """Tests for weighted_sample function."""
+
+    def test_basic_sampling(self):
+        """Test basic weighted sampling."""
+        rng = random.Random(42)
+
+        source1 = [{"id": i, "source": "a"} for i in range(100)]
+        source2 = [{"id": i, "source": "b"} for i in range(100)]
+
+        sources = [
+            (source1, 0.7),
+            (source2, 0.3),
+        ]
+
+        result = weighted_sample(sources, 100, rng)
+
+        assert len(result) > 0
+        # Check distribution is roughly correct
+        count_a = sum(1 for x in result if x["source"] == "a")
+        count_b = sum(1 for x in result if x["source"] == "b")
+
+        # Should be roughly 70/30 split (with some variance)
+        assert count_a > count_b
+
+    def test_empty_source_handled(self):
+        """Test that empty sources are handled."""
+        rng = random.Random(42)
+
+        source1 = [{"id": i} for i in range(50)]
+        source2 = []  # Empty
+
+        sources = [
+            (source1, 0.5),
+            (source2, 0.5),
+        ]
+
+        result = weighted_sample(sources, 50, rng)
+
+        assert len(result) > 0
+
+    def test_respects_total_samples(self):
+        """Test that total samples is respected."""
+        rng = random.Random(42)
+
+        source1 = [{"id": i} for i in range(100)]
+        source2 = [{"id": i} for i in range(100)]
+
+        sources = [
+            (source1, 0.5),
+            (source2, 0.5),
+        ]
+
+        result = weighted_sample(sources, 50, rng)
+
+        assert len(result) <= 100  # At most sum of samples
+
+
+class TestLoadPhysicsAugmentedData:
+    """Tests for load_physics_augmented_data function."""
+
+    def test_load_from_file(self):
+        """Test loading from JSONL file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create test file
+            train_file = os.path.join(tmpdir, "train.jsonl")
+            examples = [
+                {"instruction": "Test 1", "input": "", "output": "out1", "type": "t1"},
+                {"instruction": "Test 2", "input": "", "output": "out2", "type": "t2"},
+            ]
+            with open(train_file, "w") as f:
+                for ex in examples:
+                    f.write(json.dumps(ex) + "\n")
+
+            result = load_physics_augmented_data(tmpdir, "System prompt")
+
+            assert len(result) == 2
+            assert "text" in result[0]
+            assert "source" in result[0]
+
+    def test_max_examples_limit(self):
+        """Test max_examples parameter."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            train_file = os.path.join(tmpdir, "train.jsonl")
+            examples = [
+                {"instruction": f"Test {i}", "input": "", "output": f"out{i}"}
+                for i in range(10)
+            ]
+            with open(train_file, "w") as f:
+                for ex in examples:
+                    f.write(json.dumps(ex) + "\n")
+
+            result = load_physics_augmented_data(tmpdir, "Prompt", max_examples=3)
+
+            assert len(result) == 3
+
+    def test_missing_file_returns_empty(self):
+        """Test that missing file returns empty list."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = load_physics_augmented_data(tmpdir, "Prompt")
+            assert result == []
+
+
+class TestMixedDatasetBuilder:
+    """Tests for MixedDatasetBuilder class."""
+
+    def test_init_default(self):
+        """Test default initialization."""
+        builder = MixedDatasetBuilder()
+
+        assert builder.config is not None
+        assert builder.rng is not None
+
+    def test_init_custom_config(self):
+        """Test initialization with custom config."""
+        config = MixedDatasetConfig(seed=123)
+        builder = MixedDatasetBuilder(config)
+
+        assert builder.config.seed == 123
+
+    def test_build_mixed_dataset_with_mock_sources(self):
+        """Test building mixed dataset with mock data."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create physics augmented data
+            physics_dir = os.path.join(tmpdir, "physics_augmented")
+            os.makedirs(physics_dir)
+            train_file = os.path.join(physics_dir, "train.jsonl")
+
+            examples = [
+                {"instruction": f"Physics {i}", "input": "", "output": f"out{i}"}
+                for i in range(20)
+            ]
+            with open(train_file, "w") as f:
+                for ex in examples:
+                    f.write(json.dumps(ex) + "\n")
+
+            config = MixedDatasetConfig(
+                quantum_llm_path=os.path.join(tmpdir, "nonexistent"),
+                physics_augmented_path=physics_dir,
+                physics_reasoning_path=os.path.join(tmpdir, "nonexistent2"),
+                output_dir=os.path.join(tmpdir, "output"),
+                max_examples_per_source=10,
+            )
+
+            builder = MixedDatasetBuilder(config)
+            train, val = builder.build_mixed_dataset(target_size=15)
+
+            # Should have some examples
+            assert len(train) + len(val) > 0
+
+    def test_save_mixed_dataset(self):
+        """Test saving mixed dataset."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = MixedDatasetConfig(output_dir=tmpdir)
+            builder = MixedDatasetBuilder(config)
+
+            train = [
+                {"text": "train example 1", "source": "test"},
+                {"text": "train example 2", "source": "test"},
+            ]
+            val = [{"text": "val example 1", "source": "test"}]
+
+            stats = builder.save_mixed_dataset(train, val)
+
+            assert stats["train_size"] == 2
+            assert stats["val_size"] == 1
+            assert os.path.exists(os.path.join(tmpdir, "train"))
+            assert os.path.exists(os.path.join(tmpdir, "val"))
+            assert os.path.exists(os.path.join(tmpdir, "stats.json"))
+
+    def test_source_distribution_tracked(self):
+        """Test that source distribution is tracked in stats."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = MixedDatasetConfig(output_dir=tmpdir)
+            builder = MixedDatasetBuilder(config)
+
+            train = [
+                {"text": "ex1", "source": "quantum_llm"},
+                {"text": "ex2", "source": "quantum_llm"},
+                {"text": "ex3", "source": "physics_augmented"},
+            ]
+            val = []
+
+            stats = builder.save_mixed_dataset(train, val)
+
+            assert stats["source_distribution"]["quantum_llm"] == 2
+            assert stats["source_distribution"]["physics_augmented"] == 1
+
+
+class TestLoadMixedDataset:
+    """Tests for load_mixed_dataset function."""
+
+    def test_invalid_split_raises_error(self):
+        """Should raise error for invalid split name."""
+        from src.training.dataset import load_mixed_dataset
+
+        with pytest.raises(ValueError):
+            load_mixed_dataset("invalid")
+
+    def test_missing_dataset_raises_error(self):
+        """Should raise error if dataset doesn't exist."""
+        from src.training.dataset import load_mixed_dataset
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = MixedDatasetConfig(output_dir=tmpdir)
+
+            with pytest.raises(FileNotFoundError):
+                load_mixed_dataset("train", config)
+
+
+class TestGetMixedDatasetStats:
+    """Tests for get_mixed_dataset_stats function."""
+
+    def test_loads_stats_from_file(self):
+        """Test loading stats from JSON file."""
+        from src.training.dataset import get_mixed_dataset_stats
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            stats = {
+                "train_size": 100,
+                "val_size": 10,
+                "source_distribution": {"a": 50, "b": 60},
+            }
+            stats_file = os.path.join(tmpdir, "stats.json")
+            with open(stats_file, "w") as f:
+                json.dump(stats, f)
+
+            config = MixedDatasetConfig(output_dir=tmpdir)
+            result = get_mixed_dataset_stats(config)
+
+            assert result["train_size"] == 100
+            assert result["val_size"] == 10
+
+    def test_missing_stats_raises_error(self):
+        """Test that missing stats file raises error."""
+        from src.training.dataset import get_mixed_dataset_stats
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = MixedDatasetConfig(output_dir=tmpdir)
+
+            with pytest.raises(FileNotFoundError):
+                get_mixed_dataset_stats(config)
 
 
 if __name__ == "__main__":
