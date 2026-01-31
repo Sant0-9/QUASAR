@@ -66,3 +66,19 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Legacy planning docs (kept locally, not in repo)
+APPROACH.md
+ARCHITECTURE.md
+BUILD_PLAN.md
+DATASETS.md
+EVALUATION.md
+EXECUTION_GUARDRAILS.md
+INTERNSHIP_STRATEGY.md
+MODELS.md
+PIQD_DESIGN.md
+PROGRESS.md
+QUANTUM_GROUNDBREAKING_PROJECT.md
+RESEARCH_PAPER.md
+software-physics-brainstorm.md
+STRATEGIC_PLAN_3_PROJECTS.md
