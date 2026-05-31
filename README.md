@@ -1,6 +1,6 @@
 # QUASAR: QUantum Algorithm Search via Augmented Reasoning
 
-> An autonomous agent that discovers novel quantum circuits using 15TB of classical physics simulations to achieve 100x faster exploration than traditional methods.
+> An autonomous agent that discovers novel quantum circuits by pairing a physics-augmented LLM proposer with a learned surrogate filter and VQE, using classical physics-simulation data (Polymathic AI's The Well) to guide the search.
 
 ---
 
@@ -10,17 +10,29 @@ QUASAR takes a physics problem and discovers quantum circuits that solve it:
 
 1. **Input**: Physics goal (e.g., "Find ground state of 6-qubit MHD lattice")
 2. **Propose**: Physics-augmented LLM generates candidate circuits informed by conservation laws and symmetries
-3. **Filter**: Surrogate model scores 10,000+ candidates in milliseconds (vs hours with VQE)
+3. **Filter**: A learned surrogate scores candidate circuits far more cheaply than VQE, so only the most promising are optimized
 4. **Evaluate**: Top 10% undergo full VQE optimization
 5. **Validate**: Best circuits run on IBM quantum hardware
 6. **Output**: Novel circuits that outperform human-designed ansatzes
 
 ---
 
+## Demo defaults vs full run
+
+Out of the box, QUASAR runs in a **demo configuration** so it is runnable without a GPU, an IBM Quantum account, or large downloads:
+
+- The discovery loop uses a **mock proposer** (`use_mock_proposer=True`), not the fine-tuned LLM.
+- The surrogate is **untrained** — no model checkpoint is bundled.
+- **The Well** dataset is **not bundled** (it is ~15TB; download it separately with `the-well-download`).
+
+A full discovery run requires downloading The Well, training/loading a surrogate checkpoint, the fine-tuned physics-augmented LLM, and IBM Quantum credentials. The goals below describe that full configuration and have not yet been benchmarked.
+
+---
+
 ## Architecture
 
 ```
-THE WELL (15TB) ──► PHYSICS ENCODER ──┬──► SURROGATE EVALUATOR (10ms)
+THE WELL (sims) ──► PHYSICS ENCODER ──┬──► SURROGATE EVALUATOR (fast)
                                       │
                                       ├──► PHYSICS-AUGMENTED LLM TRAINING
                                       │
@@ -52,11 +64,11 @@ THE WELL (15TB) ──► PHYSICS ENCODER ──┬──► SURROGATE EVALUATOR
 
 Predicts circuit quality without running VQE. Trained on physics dynamics from The Well, then fine-tuned on quantum circuit data.
 
-| Metric | Value |
-|--------|-------|
-| Inference time | 10ms per circuit |
-| Accuracy | R^2 > 0.7 |
-| Speedup | 100x exploration capacity |
+| Metric | Design target |
+|--------|---------------|
+| Inference cost | far cheaper than a VQE run per circuit |
+| Accuracy | R^2 > 0.7 once trained |
+| Role | cheaply screen candidates before expensive VQE |
 
 ### Physics-Augmented LLM
 
@@ -186,14 +198,16 @@ Each hardware run records job ID, backend calibration date, transpiled depth, an
 
 ---
 
-## Key Claims
+## Goals
 
-| Claim | Evidence |
-|-------|----------|
-| 100x speedup | Surrogate enables 10,000+ circuit exploration vs ~100 with VQE only |
-| Physics-augmented improvement | 20%+ lower energy error than code-only LLM |
-| Novel MHD circuits | First quantum circuits for magnetohydrodynamics |
-| Hardware validated | IBM Quantum results confirm simulation accuracy |
+Design goals, not yet benchmarked (the default config runs a mock proposer and an untrained surrogate — see [Demo defaults vs full run](#demo-defaults-vs-full-run)):
+
+| Goal | Rationale |
+|------|-----------|
+| Faster exploration | A cheap surrogate filter lets the agent screen far more candidates than running VQE on each |
+| Physics-augmented improvement | Target lower energy error than a code-only LLM |
+| Novel MHD circuits | First quantum circuits targeting magnetohydrodynamics |
+| Hardware validation | Circuits run on IBM Quantum hardware (ibm_sherbrooke) |
 
 ---
 
@@ -263,9 +277,9 @@ Detailed specifications in `guidelines/`:
 
 QUASAR fills a gap: no one has used large-scale classical physics simulation data to improve quantum algorithm discovery.
 
-| Current State | QUASAR Innovation |
+| Current State | QUASAR Approach |
 |---------------|-----------------|
 | LLMs trained on code only | LLMs trained on code + physics dynamics |
-| VQE bottleneck (~100 circuits) | Surrogate enables ~10,000 circuits |
+| VQE evaluated per circuit (slow) | Surrogate filters many candidates before VQE |
 | Toy problems only | Real physics targets (MHD) |
-| No physics grounding | Physics-informed from 15TB simulations |
+| No physics grounding | Physics-informed from classical simulation data (The Well) |
