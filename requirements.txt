@@ -20,7 +20,8 @@ pandas>=2.0.0
 h5py>=3.8.0
 
 # The Well physics simulations
-the-well>=0.1.0
+# well_loader passes restrict_num_samples to WellDataset, added in 1.2.0.
+the-well>=1.2.0
 
 # Visualization
 matplotlib>=3.7.0
